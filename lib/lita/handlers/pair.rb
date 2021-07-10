@@ -8,7 +8,19 @@ module Lita
       route(
         /pair add/i,
         :add,
-        help: { 'pair add' => 'Put your name in the queue for debugging help.' }
+        help: { 'pair add' => 'Put your name in the queue for pairing.' }
+      )
+
+      route(
+        /pair remove/i,
+        :remove,
+        help: { 'pair remove' => 'Remove your name from the queue for pairing.' }
+      )
+
+      route(
+        /pair memberships/i,
+        :memberships,
+        help: { 'pair memberships' => 'See which channels you are in the pairing queue for.' }
       )
 
       route(
@@ -24,7 +36,7 @@ module Lita
       )
 
       def add response
-        argument = response.args[1].sub(/.*?@/, '')
+        argument = response.args[1]&.sub(/.*?@/, '')
         user_name = argument || response.user.mention_name
         user = slack_user user_name
 
@@ -32,10 +44,37 @@ module Lita
 
         room_name = response.message.source.room_object.name
 
-        redis.set key_for_members(room_name), user.id
-        redis.lpush key_for_memberships(user.id), room_name
+        redis.sadd key_for_members(room_name), user.id
+        redis.sadd key_for_memberships(user.id), room_name
 
         response.reply "Great, #{user_name} is now in the pairing list for #{room_name}"
+      end
+
+      def remove response
+        argument = response.args[1]&.sub(/.*?@/, '')
+        user_name = argument || response.user.mention_name
+        user = slack_user user_name
+
+        return response.reply('Please use the Slack username') if !user
+
+        room_name = response.message.source.room_object.name
+
+        redis.srem key_for_members(room_name), user.id
+        redis.srem key_for_memberships(user.id), 1, room_name
+
+        response.reply "Great, #{user_name} is now removed from pairing for #{room_name}"
+      end
+
+      def memberships response
+        argument = response.args[1]&.sub(/.*?@/, '')
+        user_name = argument || response.user.mention_name
+        user = slack_user user_name
+
+        return response.reply('Please use the Slack username') if !user
+
+        rooms = redis.smembers key_for_memberships(user.id)
+
+        response.reply "#{user_name} is a member of #{rooms.join(', ')}"
       end
 
       def schedule response # every tuesday at 10am // once today at 10am
@@ -74,8 +113,6 @@ module Lita
         scheduler.cron("#{minute_of_hour} #{hour_of_day} * * #{weekday}") do
           message_random_users room_name
         end
-
-        scheduler.shutdown
       end
 
       def schedule_once day, time, room_name
@@ -85,8 +122,6 @@ module Lita
         scheduler.at time_at do
           message_random_users room_name
         end
-
-        scheduler.shutdown
       end
 
       def message_random_users room_name
@@ -99,7 +134,7 @@ module Lita
       end
 
       def group_random_users channel
-        users = get_users_in_channel(channel).to_a.shuffle
+        users = get_users_in_channel(channel).to_a
         number = get_group_size_in_channel(channel).to_i
         number_of_groups = users.size / number
         remainder = users.size % number
@@ -115,8 +150,8 @@ module Lita
       end
 
       def get_users_in_channel channel
-        # redis.get key_for_members(channel)
-        redis.lrange key_for_members(channel), 0, -1
+        count = redis.scard(key_for_members(channel))
+        redis.srandmember key_for_members(channel), 4
       end
 
       def get_group_size_in_channel channel
@@ -125,12 +160,6 @@ module Lita
 
       def slack_user name
         Lita::User.fuzzy_find(name)
-        # Lita::Source.new(user: )
-      end
-
-      def slack_source_channel room
-        Lita::Room.find_by_name(room)
-        # Lita::Source.new(room: )
       end
 
       def key_for_members name
