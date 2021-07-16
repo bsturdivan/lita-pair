@@ -130,14 +130,25 @@ module Lita
           group&.map { |id| slack_user(id) }
         end
 
-        user_groups.each { |group| Lita::Source.new(user: group) }
+        user_groups.each do |group|
+          ids = group.map { |user| user.id }.join('+')
+          names = group.map { |user| user.mention_name }.join(', ')
+          message = "#{names} you have been selected from #{room_name} to meet this week!"
+          room = Lita::Room.create_or_update("user_#{ids}")
+          users_to_source = group.each { |user| Lita::Source.new(user: user, room: room) }
+          users_to_source.each_with_index do |source|
+            Lita::Massage.new robot, message, source
+          end
+        end
       end
 
       def group_random_users channel
         users = get_users_in_channel(channel).to_a
-        number = get_group_size_in_channel(channel).to_i
+        number = get_group_size_in_channel(channel).to_i || 2
         number_of_groups = users.size / number
         remainder = users.size % number
+
+        puts users
 
         groups = users.map do |user|
           new_group = users.pop(number)
@@ -145,6 +156,8 @@ module Lita
 
           new_group.concat(users.pop(remainder_users))
         end
+
+        puts groups
 
         groups
       end
