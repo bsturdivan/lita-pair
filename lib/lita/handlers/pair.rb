@@ -120,6 +120,7 @@ module Lita
         time_at = Time.parse("#{day} #{time}")
 
         scheduler.at time_at do
+          p 'Scheduled'
           message_random_users room_name
         end
       end
@@ -148,7 +149,7 @@ module Lita
         number_of_groups = users.size / number
         remainder = users.size % number
 
-        puts users
+        p users
 
         groups = users.map do |user|
           new_group = users.pop(number)
@@ -157,7 +158,7 @@ module Lita
           new_group.concat(users.pop(remainder_users))
         end
 
-        puts groups
+        p groups
 
         groups
       end
