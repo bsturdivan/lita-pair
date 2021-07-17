@@ -120,7 +120,6 @@ module Lita
         time_at = Time.parse("#{day} #{time}")
 
         scheduler.at time_at do
-          p 'Scheduled'
           message_random_users room_name
         end
       end
@@ -131,16 +130,9 @@ module Lita
           group&.map { |id| slack_user(id) }
         end
 
-        # user_groups.each do |group|
-        #   ids = group.map { |user| user.id }.join('+')
-        #   names = group.map { |user| user.mention_name }.join(', ')
-        #   message = "#{names} you have been selected from #{room_name} to meet this week!"
-        #   room = Lita::Room.create_or_update("user_#{ids}")
-        #   users_to_source = group.each { |user| Lita::Source.new(user: user, room: room) }
-        #   users_to_source.each_with_index do |source|
-        #     Lita::Massage.new robot, message, source
-        #   end
-        # end
+        user_groups.each do |group|
+          group.each { |user| Lita::Source.new(user: group) }
+        end
       end
 
       def group_random_users channel
@@ -149,7 +141,7 @@ module Lita
         number_of_groups = users.size / number
         remainder = users.size % number
 
-        p users
+        puts users
 
         groups = users.map do |user|
           new_group = users.pop(number)
@@ -158,7 +150,7 @@ module Lita
           new_group.concat(users.pop(remainder_users))
         end
 
-        p groups
+        puts groups
 
         groups
       end
